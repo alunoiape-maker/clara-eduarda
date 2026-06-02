@@ -1,1 +1,347 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lista de Alunos</title>
 
+<style>
+:root{
+    --primary:#2563eb;
+    --primary-hover:#1d4ed8;
+    --border:#e5e7eb;
+    --bg:#f8fafc;
+    --text:#111827;
+    --muted:#6b7280;
+    --white:#ffffff;
+}
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    font-family:Arial, Helvetica, sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    min-height:100vh;
+    padding:30px 15px;
+}
+
+.container{
+    max-width:800px;
+    margin:auto;
+}
+
+.card{
+    background:var(--white);
+    border-radius:16px;
+    padding:24px;
+    box-shadow:0 10px 30px rgba(0,0,0,.08);
+}
+
+h1{
+    text-align:center;
+    margin-bottom:10px;
+}
+
+.subtitle{
+    text-align:center;
+    color:var(--muted);
+    margin-bottom:25px;
+}
+
+.form{
+    display:flex;
+    gap:10px;
+    margin-bottom:25px;
+}
+
+.form input{
+    flex:1;
+    padding:14px;
+    border:1px solid var(--border);
+    border-radius:10px;
+    font-size:16px;
+}
+
+.form button{
+    padding:14px 22px;
+    border:none;
+    border-radius:10px;
+    background:var(--primary);
+    color:white;
+    cursor:pointer;
+    font-size:16px;
+    font-weight:bold;
+}
+
+.form button:hover{
+    background:var(--primary-hover);
+}
+
+.status{
+    text-align:center;
+    margin-bottom:15px;
+    color:var(--muted);
+}
+
+.list{
+    border:1px solid var(--border);
+    border-radius:12px;
+    overflow:hidden;
+}
+
+.list-header{
+    background:#eef2ff;
+    padding:14px;
+    font-weight:bold;
+}
+
+.student-row{
+    padding:14px;
+}
+
+.student-row:nth-child(even){
+    background:#f8fafc;
+}
+
+.student-row:nth-child(odd){
+    background:#ffffff;
+}
+
+.empty{
+    padding:20px;
+    text-align:center;
+    color:var(--muted);
+}
+
+.loading{
+    text-align:center;
+    padding:15px;
+}
+
+@media (max-width:600px){
+
+    .form{
+        flex-direction:column;
+    }
+
+    .form button{
+        width:100%;
+    }
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+    <div class="card">
+
+        <h1>Lista de Alunos</h1>
+        <div class="subtitle">
+            Google Planilhas + Apps Script + GitHub Pages
+        </div>
+
+        <div class="form">
+            <input
+                type="text"
+                id="studentName"
+                placeholder="Digite o nome do aluno"
+            >
+            <button onclick="saveStudent()">
+                Salvar
+            </button>
+        </div>
+
+        <div id="status" class="status"></div>
+
+        <div class="list">
+            <div class="list-header">
+                Alunos
+            </div>
+
+            <div id="studentsContainer">
+                <div class="loading">
+                    Carregando...
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+
+/*
+========================================================
+CONFIGURAÇÃO
+Cole aqui a URL do Web App do Google Apps Script
+========================================================
+*/
+const CONFIG = {
+    WEB_APP_URL: "COLE_AQUI_SUA_URL_DO_WEB_APP"
+};
+
+function jsonp(url){
+    return new Promise((resolve,reject)=>{
+
+        const callbackName =
+            "jsonp_" +
+            Date.now() +
+            "_" +
+            Math.floor(Math.random()*100000);
+
+        window[callbackName] = function(data){
+
+            resolve(data);
+
+            delete window[callbackName];
+
+            if(script.parentNode){
+                script.parentNode.removeChild(script);
+            }
+        };
+
+        const script = document.createElement("script");
+
+        script.onerror = function(){
+            reject("Erro na requisição JSONP");
+        };
+
+        script.src =
+            url +
+            (url.includes("?") ? "&" : "?") +
+            "callback=" +
+            callbackName;
+
+        document.body.appendChild(script);
+    });
+}
+
+async function loadStudents(){
+
+    const container =
+        document.getElementById("studentsContainer");
+
+    container.innerHTML =
+        '<div class="loading">Carregando...</div>';
+
+    try{
+
+        const data = await jsonp(
+            CONFIG.WEB_APP_URL +
+            "?action=list"
+        );
+
+        renderStudents(data.students || []);
+
+    }catch(error){
+
+        container.innerHTML =
+            '<div class="empty">Erro ao carregar dados.</div>';
+    }
+}
+
+function renderStudents(students){
+
+    const container =
+        document.getElementById("studentsContainer");
+
+    if(!students.length){
+
+        container.innerHTML =
+            '<div class="empty">Nenhum aluno cadastrado.</div>';
+
+        return;
+    }
+
+    container.innerHTML = students
+        .map(student => `
+            <div class="student-row">
+                ${escapeHtml(student.nome)}
+            </div>
+        `)
+        .join("");
+}
+
+async function saveStudent(){
+
+    const input =
+        document.getElementById("studentName");
+
+    const name =
+        input.value.trim();
+
+    const status =
+        document.getElementById("status");
+
+    if(!name){
+
+        alert("Digite um nome.");
+        return;
+    }
+
+    status.textContent = "Salvando...";
+
+    try{
+
+        const url =
+            CONFIG.WEB_APP_URL +
+            "?action=add&name=" +
+            encodeURIComponent(name);
+
+        const response = await jsonp(url);
+
+        if(response.success){
+
+            input.value = "";
+
+            status.textContent =
+                "Aluno salvo com sucesso.";
+
+            renderStudents(response.students || []);
+
+        }else{
+
+            status.textContent =
+                response.message || "Erro ao salvar.";
+        }
+
+    }catch(error){
+
+        status.textContent =
+            "Erro ao salvar aluno.";
+    }
+
+    setTimeout(()=>{
+        status.textContent = "";
+    },3000);
+}
+
+function escapeHtml(text){
+
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+document
+.getElementById("studentName")
+.addEventListener("keypress", function(e){
+
+    if(e.key === "Enter"){
+        saveStudent();
+    }
+});
+
+loadStudents();
+
+</script>
+
+</body>
+</html>
